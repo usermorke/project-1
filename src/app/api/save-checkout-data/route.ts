@@ -1,38 +1,40 @@
-import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-
-// Marcați ruta ca fiind dinamică
-export const dynamic = "force-dynamic";
+import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    // Obțineți datele primite de la client
     const data = await request.json();
-    const filePath = path.join(process.cwd(), "checkout-data.json");
 
-    // Verificați dacă fișierul există
-    if (!fs.existsSync(filePath)) {
-      // Dacă nu există, creați-l și adăugați datele
-      fs.writeFileSync(filePath, JSON.stringify([data], null, 2), "utf-8");
-      console.log("Fișierul `checkout-data.json` a fost creat.");
-    } else {
-      // Dacă fișierul există, adăugați datele la cele existente
-      const existingData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      existingData.push(data);
+    const response = await fetch(`${process.env.NEXT_PUBLIC_EDGE_CONFIG}/items`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${process.env.NEXT_PUBLIC_VERCEL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            operation: 'update',
+            key: 'checkout-data',
+            value: data,
+          },
+        ],
+      }),
+    });
 
-      fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2), "utf-8");
-      console.log("Datele au fost adăugate în `checkout-data.json`.");
+    if (!response.ok) {
+      const errorResponse = await response.json();
+      console.error('Error saving to Edge Config:', errorResponse);
+      return NextResponse.json(
+        { success: false, message: 'Failed to save data to Edge Config.' },
+        { status: response.status }
+      );
     }
 
-    // Log pentru datele primite
-    console.log("Datele primite de la utilizator:", data);
-
-    return NextResponse.json({ success: true, message: "Datele au fost salvate cu succes." });
+    return NextResponse.json({ success: true, message: 'Data saved to Edge Config.' });
   } catch (error) {
-    console.error("Eroare la salvarea datelor:", error);
+    console.error('Error saving data to Edge Config:', error);
     return NextResponse.json(
-      { success: false, message: "Eroare la salvarea datelor." },
+      { success: false, message: 'Error saving data.' },
       { status: 500 }
     );
   }
